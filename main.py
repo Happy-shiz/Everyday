@@ -135,6 +135,9 @@ def update_monthly_view():
                 week_str += f"{str(day).ljust(3)}({str(num_tasks).rjust(2)})   "
             tk.Label(monthly_frame, text=week_str, font=("Courier", 10)).pack()
             week = []
+    
+    # Update the month label at the top
+    month_label.config(text=f"{calendar.month_name[selected_month]} {selected_year}")
 
 # Function to switch to the previous year
 def prev_year():
@@ -150,23 +153,8 @@ def next_year():
     update_monthly_view()
     year_label.config(text=f"Год: {selected_year}")
 
-xui=int(input(selected_month))
-
-def prev_month_num():
-    global selected_month
-    selected_month -= 1
-    update_monthly_view()
-    month_label.config(text=f"Месяц: {selected_month}")
-
-def next_month_num():
-    global selected_month
-    selected_month += 1
-    update_monthly_view()
-    month_label.config(text=f"Месяц: {selected_month}")
-
 # Function to switch to the previous month
 def prev_month():
-    xui -= 1
     global selected_month
     if selected_month == 1:
         selected_month = 12
@@ -212,12 +200,11 @@ next_year_btn.pack(side="left", padx=5)
 month_nav_frame = tk.Frame(root)
 month_nav_frame.pack(pady=5)
 
-
-prev_month_btn = tk.Button(month_nav_frame, text="<", command=prev_month,)
+prev_month_btn = tk.Button(month_nav_frame, text="<", command=prev_month)
 prev_month_btn.pack(side="left", padx=5)
 month_label = tk.Label(month_nav_frame, text=f"Месяц: {calendar.month_name[selected_month]}", font=("Arial", 12, "bold"))
 month_label.pack(side="left")
-next_month_btn = tk.Button(month_nav_frame, text=">", command=next_month,)
+next_month_btn = tk.Button(month_nav_frame, text=">", command=next_month)
 next_month_btn.pack(side="left", padx=5)
 
 # Input fields with labels
@@ -240,7 +227,6 @@ category_dropdown = ttk.Combobox(root, textvariable=category_var, values=list(CA
 category_dropdown.pack()
 tk.Button(root, text="Добавить событие", command=add_event).pack()
 
-# Button to refresh the calendar view after deletions
 tk.Button(root, text="Обновить календарь", command=update_monthly_view).pack()
 
 update_monthly_view()
