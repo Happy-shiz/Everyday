@@ -1,149 +1,207 @@
+import sqlite3
 import tkinter as tk
-from tkinter import ttk
-import tkcalendar as Calendar
-import datetime
+from tkinter import ttk, messagebox
+from tkcalendar import Calendar
+from plyer import notification
+import winsound
+import threading
+import time
 
-class Entry:
-    def __init__(self, date, title, content, owner):
-        self.date = date
-        self.title = title
-        self.content = content
-        self.owner = owner
+# Создание или подключение к базе данных
+conn = sqlite3.connect("calendar.db")
+cursor = conn.cursor()
 
-    def __str__(self):
-        return f"{self.date.strftime('%Y-%m-%d')} - {self.title} ({self.owner})"
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    date TEXT NOT NULL,
+    time TEXT NOT NULL,
+    category TEXT NOT NULL
+)
+""")
+conn.commit()
 
-class Task:
-    def __init__(self, day, start_time, end_time, title):
-        self.day = day
-        self.start_time = start_time
-        self.end_time = end_time
-        self.title = title
+# Цвета категорий
+CATEGORY_COLORS = {
+    "Работа": "#ffcc00",
+    "Семья": "#ff6699",
+    "Здоровье": "#33cc33",
+    "Тренировки": "#3399ff",
+    "Обучение": "#9933ff",
+    "События": "#ff5050"
+}
 
-    def __str__(self):
-        return f"{self.start_time.strftime('%H:%M')} - {self.end_time.strftime('%H:%M')}: {self.title}"
+# Функция добавления события
+def add_event():
+    title = title_entry.get()
+    description = description_entry.get("1.0", tk.END).strip()
+    date = date_entry.get()
+    time = time_entry.get()
+    category = category_var.get()
 
-class Diary:
-    def __init__(self):
-        self.entries = []
+    if not title or not date or not time or not category:
+        messagebox.showwarning("Ошибка", "Заполните все обязательные поля!")
+        return
 
-    def add_entry(self, date, title, content, owner):
-        entry = Entry(date, title, content, owner)
-        self.entries.append(entry)
+    cursor.execute("INSERT INTO events (title, description, date, time, category) VALUES (?, ?, ?, ?, ?)", 
+                   (title, description, date, time, category))
+    conn.commit()
+    update_monthly_view()
+    update_weekly_view()
+    update_daily_view()
+    clear_inputs()
 
-    def view_entries(self):
-        return [str(entry) for entry in self.entries]
+# Функция удаления события
+def delete_event():
+    selected_item = event_list.selection()
+    if not selected_item:
+        messagebox.showwarning("Ошибка", "Выберите событие для удаления")
+        return
 
-class WeeklySchedule:
-    def __init__(self):
-        self.tasks = {}
+    event_id = event_list.item(selected_item, "values")[0]
+    cursor.execute("DELETE FROM events WHERE id=?", (event_id,))
+    conn.commit()
+    update_monthly_view()
+    update_weekly_view()
+    update_daily_view()
 
-    def add_task(self, task):
-        if task.day not in self.tasks:
-            self.tasks[task.day] = []
-        self.tasks[task.day].append(task)
+# Очистка полей ввода
+def clear_inputs():
+    title_entry.delete(0, tk.END)
+    description_entry.delete("1.0", tk.END)
+    date_entry.delete(0, tk.END)
+    time_entry.delete(0, tk.END)
 
-    def get_tasks_for_day(self, day):
-        return self.tasks.get(day, [])
+# Выбор даты через календарь
+def pick_date():
+    def set_date():
+        date_entry.delete(0, tk.END)
+        date_entry.insert(0, cal.get_date())
+        top.destroy()
 
-class CombinedGUI:
-    def __init__(self, master):
-        self.master = master
-        self.master.title("Ежедневник и Расписание")
-        self.diary = Diary()
-        self.schedule = WeeklySchedule()
-        self.create_widgets()
+    top = tk.Toplevel(root)
+    top.title("Выберите дату")
+    cal = Calendar(top, date_pattern="yyyy-mm-dd")
+    cal.pack(pady=20)
+    tk.Button(top, text="Выбрать", command=set_date).pack(pady=10)
 
-    def create_widgets(self):
-        self.notebook = ttk.Notebook(self.master)
-        self.notebook.pack(fill=tk.BOTH, expand=True)
+# Функция обновления месячного календаря
+def update_monthly_view():
+    for widget in monthly_frame.winfo_children():
+        widget.destroy()
 
-        diary_tab = ttk.Frame(self.notebook)
-        self.notebook.add(diary_tab, text='Ежедневник')
-        self.create_diary_tab(diary_tab)
+    cursor.execute("SELECT date, title, category FROM events")
+    events = cursor.fetchall()
 
-        schedule_tab = ttk.Frame(self.notebook)
-        self.notebook.add(schedule_tab, text='Расписание')
-        self.create_schedule_tab(schedule_tab)
+    for event_date, title, category in events:
+        label = tk.Label(monthly_frame, text=f"{event_date}: {title}", bg=CATEGORY_COLORS.get(category, "#ffffff"))
+        label.pack(anchor="w", padx=5, pady=2)
 
-    def create_diary_tab(self, frame):
-        self.diary_date = Calendar(frame, selectmode='day', year=datetime.datetime.now().year, month=datetime.datetime.now().month, day=datetime.datetime.now().day)
-        self.diary_date.pack(side=tk.TOP)
+# Функция обновления недельного календаря
+def update_weekly_view():
+    for widget in weekly_frame.winfo_children():
+        widget.destroy()
 
-        ttk.Label(frame, text="Заголовок:").pack(side=tk.TOP)
-        self.diary_title = ttk.Entry(frame)
-        self.diary_title.pack(side=tk.TOP)
+    cursor.execute("SELECT date, title, category FROM events WHERE date BETWEEN DATE('now', '-7 days') AND DATE('now', '+7 days')")
+    events = cursor.fetchall()
 
-        ttk.Label(frame, text="Содержание:").pack(side=tk.TOP)
-        self.diary_content = ttk.Entry(frame)
-        self.diary_content.pack(side=tk.TOP)
+    for event_date, title, category in events:
+        label = tk.Label(weekly_frame, text=f"{event_date}: {title}", bg=CATEGORY_COLORS.get(category, "#ffffff"))
+        label.pack(anchor="w", padx=5, pady=2)
 
-        ttk.Label(frame, text="Владелец:").pack(side=tk.TOP)
-        self.diary_owner = ttk.Entry(frame)
-        self.diary_owner.pack(side=tk.TOP)
+# Функция обновления дневного календаря
+def update_daily_view():
+    for widget in daily_frame.winfo_children():
+        widget.destroy()
 
-        ttk.Button(frame, text="Добавить запись", command=self.add_diary_entry).pack(side=tk.TOP)
+    cursor.execute("SELECT time, title, category FROM events WHERE date = DATE('now')")
+    events = cursor.fetchall()
 
-        self.diary_list = tk.Listbox(frame, width=100)
-        self.diary_list.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    for event_time, title, category in events:
+        label = tk.Label(daily_frame, text=f"{event_time}: {title}", bg=CATEGORY_COLORS.get(category, "#ffffff"))
+        label.pack(anchor="w", padx=5, pady=2)
 
-    def create_schedule_tab(self, frame):
-        ttk.Label(frame, text="День:").pack()
-        self.schedule_day = tk.StringVar()
-        days = [day.strftime('%A') for day in [datetime.date.today() + datetime.timedelta(days=i) for i in range(7)]]
-        self.schedule_day_combobox = ttk.Combobox(frame, textvariable=self.schedule_day, values=days, state="readonly")
-        self.schedule_day_combobox.pack()
+# Функция проверки и отправки уведомлений
+def check_notifications():
+    while True:
+        now = time.strftime("%Y-%m-%d %H:%M")
+        cursor.execute("SELECT title FROM events WHERE date || ' ' || time = ?", (now,))
+        event = cursor.fetchone()
 
-        ttk.Label(frame, text="Время начала (HH:MM):").pack()
-        self.schedule_start_time = ttk.Entry(frame)
-        self.schedule_start_time.pack()
+        if event:
+            notification.notify(
+                title="Напоминание",
+                message=f"Событие: {event[0]}",
+                app_name="Офлайн Календарь",
+                timeout=10
+            )
+            winsound.PlaySound("SystemExclamation", winsound.SND_ALIAS)
 
-        ttk.Label(frame, text="Время окончания (HH:MM):").pack()
-        self.schedule_end_time = ttk.Entry(frame)
-        self.schedule_end_time.pack()
+        time.sleep(30)
 
-        ttk.Label(frame, text="Заголовок задачи:").pack()
-        self.schedule_task_title = ttk.Entry(frame)
-        self.schedule_task_title.pack()
+# Запуск фонового потока уведомлений
+threading.Thread(target=check_notifications, daemon=True).start()
 
-        ttk.Button(frame, text="Добавить задачу", command=self.add_schedule_task).pack()
+# Создание GUI
+root = tk.Tk()
+root.title("Офлайн Календарь")
+root.geometry("800x600")
 
-        self.schedule_list = tk.Listbox(frame, width=50)
-        self.schedule_list.pack(fill=tk.BOTH, expand=True)
+# Боковая панель категорий
+sidebar = tk.Frame(root, width=150, bg="#333")
+sidebar.pack(side="left", fill="y")
 
-    def add_diary_entry(self):
-        date = self.diary_date.selection_get()
-        title = self.diary_title.get()
-        content = self.diary_content.get()
-        owner = self.diary_owner.get()
-        self.diary.add_entry(date, title, content, owner)
-        self.update_diary_list()
+tk.Label(sidebar, text="Категории", bg="#333", fg="white").pack(pady=10)
+for category, color in CATEGORY_COLORS.items():
+    tk.Label(sidebar, text=category, bg=color, fg="black", padx=10).pack(pady=2)
 
-    def update_diary_list(self):
-        self.diary_list.delete(0, tk.END)
-        for item in self.diary.view_entries():
-            self.diary_list.insert(tk.END, item)
+# Основное окно с вкладками
+notebook = ttk.Notebook(root)
+notebook.pack(expand=True, fill="both")
 
-    def add_schedule_task(self):
-        try:
-            day = next(date for date in [datetime.date.today() + datetime.timedelta(days=i) for i in range(7)] if date.strftime('%A') == self.schedule_day.get())
-            start_time = datetime.datetime.strptime(self.schedule_start_time.get(), '%H:%M').time()
-            end_time = datetime.datetime.strptime(self.schedule_end_time.get(), '%H:%M').time()
-            title = self.schedule_task_title.get()
+# Вкладки
+monthly_frame = tk.Frame(notebook)
+weekly_frame = tk.Frame(notebook)
+daily_frame = tk.Frame(notebook)
 
-            task = Task(day, start_time, end_time, title)
-            self.schedule.add_task(task)
-            self.update_schedule_list()
-        except ValueError:
-            pass
+notebook.add(monthly_frame, text="Месяц")
+notebook.add(weekly_frame, text="Неделя")
+notebook.add(daily_frame, text="День")
 
-    def update_schedule_list(self):
-        self.schedule_list.delete(0, tk.END)
-        for task in self.schedule.get_tasks_for_day(datetime.date.today()):
-            self.schedule_list.insert(tk.END, str(task))
+# Поля ввода
+title_entry = tk.Entry(root)
+title_entry.pack()
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = CombinedGUI(root)
-    root.mainloop()
-    
+description_entry = tk.Text(root, height=3)
+description_entry.pack()
+
+date_entry = tk.Entry(root)
+date_entry.pack()
+tk.Button(root, text="📅 Выбрать дату", command=pick_date).pack()
+
+time_entry = tk.Entry(root)
+time_entry.pack()
+
+category_var = tk.StringVar()
+category_dropdown = ttk.Combobox(root, textvariable=category_var, values=list(CATEGORY_COLORS.keys()))
+category_dropdown.pack()
+
+tk.Button(root, text="Добавить событие", command=add_event).pack()
+tk.Button(root, text="Удалить событие", command=delete_event).pack()
+
+# Таблица событий
+columns = ("id", "Название", "Описание", "Дата", "Время", "Категория")
+event_list = ttk.Treeview(root, columns=columns, show="headings")
+for col in columns:
+    event_list.heading(col, text=col)
+event_list.pack(fill="both", expand=True)
+
+update_monthly_view()
+update_weekly_view()
+update_daily_view()
+
+root.mainloop()
+
+conn.close()
