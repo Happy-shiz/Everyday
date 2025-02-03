@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+from tkcalendar import Calendar
 import datetime
 
 class Entry:
@@ -54,38 +55,34 @@ class CombinedGUI:
         self.create_widgets()
 
     def create_widgets(self):
-        # Вкладки для разных функций
         self.notebook = ttk.Notebook(self.master)
         self.notebook.pack(fill=tk.BOTH, expand=True)
 
-        # Вкладка для ежедневника
         diary_tab = ttk.Frame(self.notebook)
         self.notebook.add(diary_tab, text='Ежедневник')
         self.create_diary_tab(diary_tab)
 
-        # Вкладка для расписания
         schedule_tab = ttk.Frame(self.notebook)
         self.notebook.add(schedule_tab, text='Расписание')
         self.create_schedule_tab(schedule_tab)
 
     def create_diary_tab(self, frame):
-        ttk.Label(frame, text="Дата:").pack(side=tk.LEFT)
-        self.diary_date = ttk.Entry(frame)
-        self.diary_date.pack(side=tk.LEFT)
+        self.diary_date = Calendar(frame, selectmode='day', year=datetime.datetime.now().year, month=datetime.datetime.now().month, day=datetime.datetime.now().day)
+        self.diary_date.pack(side=tk.TOP)
 
-        ttk.Label(frame, text="Заголовок:").pack(side=tk.LEFT)
+        ttk.Label(frame, text="Заголовок:").pack(side=tk.TOP)
         self.diary_title = ttk.Entry(frame)
-        self.diary_title.pack(side=tk.LEFT)
+        self.diary_title.pack(side=tk.TOP)
 
-        ttk.Label(frame, text="Содержание:").pack(side=tk.LEFT)
+        ttk.Label(frame, text="Содержание:").pack(side=tk.TOP)
         self.diary_content = ttk.Entry(frame)
-        self.diary_content.pack(side=tk.LEFT)
+        self.diary_content.pack(side=tk.TOP)
 
-        ttk.Label(frame, text="Владелец:").pack(side=tk.LEFT)
+        ttk.Label(frame, text="Владелец:").pack(side=tk.TOP)
         self.diary_owner = ttk.Entry(frame)
-        self.diary_owner.pack(side=tk.LEFT)
+        self.diary_owner.pack(side=tk.TOP)
 
-        ttk.Button(frame, text="Добавить запись", command=self.add_diary_entry).pack(side=tk.LEFT)
+        ttk.Button(frame, text="Добавить запись", command=self.add_diary_entry).pack(side=tk.TOP)
 
         self.diary_list = tk.Listbox(frame, width=100)
         self.diary_list.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -115,15 +112,12 @@ class CombinedGUI:
         self.schedule_list.pack(fill=tk.BOTH, expand=True)
 
     def add_diary_entry(self):
-        try:
-            date = datetime.datetime.strptime(self.diary_date.get(), '%Y-%m-%d').date()
-            title = self.diary_title.get()
-            content = self.diary_content.get()
-            owner = self.diary_owner.get()
-            self.diary.add_entry(date, title, content, owner)
-            self.update_diary_list()
-        except ValueError:
-            pass
+        date = self.diary_date.selection_get()
+        title = self.diary_title.get()
+        content = self.diary_content.get()
+        owner = self.diary_owner.get()
+        self.diary.add_entry(date, title, content, owner)
+        self.update_diary_list()
 
     def update_diary_list(self):
         self.diary_list.delete(0, tk.END)
@@ -152,3 +146,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = CombinedGUI(root)
     root.mainloop()
+    
